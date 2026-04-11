@@ -20,7 +20,8 @@ from app.api import (
     inventory_check,
     permissions,
     upload,
-    custom_fields
+    custom_fields,
+    workflow_fields
 )
 from app.middleware.operation_logging import OperationLoggingMiddleware
 import os
@@ -66,6 +67,7 @@ app.include_router(inventory_check.router, prefix="/api/inventory-check", tags=[
 app.include_router(permissions.router, prefix="/api/permissions", tags=["权限管理"])
 app.include_router(upload.router, prefix="/api/upload", tags=["文件上传"])
 app.include_router(custom_fields.router, prefix="/api/custom-fields", tags=["自定义字段"])
+app.include_router(workflow_fields.router, prefix="/api/workflow-fields", tags=["工作流配置"])
 
 # 静态文件服务（上传文件访问）
 os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
