@@ -21,6 +21,7 @@ from app.api import (
     permissions,
     upload
 )
+from app.middleware.operation_logging import OperationLoggingMiddleware
 import os
 
 
@@ -47,6 +48,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# 操作日志中间件
+app.add_middleware(OperationLoggingMiddleware)
 
 # 注册路由
 app.include_router(auth.router, prefix="/api/auth", tags=["认证"])

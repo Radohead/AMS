@@ -49,11 +49,14 @@ def db_session(db_engine):
 def client(db_session):
     """创建 FastAPI 测试客户端"""
     from fastapi.testclient import TestClient
+    from starlette.requests import Request
     from app.core.database import get_db
     from main import app
 
-    def override_get_db():
+    def override_get_db(request: Request = None):
         try:
+            if request is not None:
+                request.state.db = db_session
             yield db_session
         finally:
             pass
