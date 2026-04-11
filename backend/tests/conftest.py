@@ -13,6 +13,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.core.database import Base
 from app.models.user import User, Role, Permission, LoginLog
+from app.models.asset import Category, Department, Employee, AssetType, AssetStatus
 from app.core.security import get_password_hash
 
 
@@ -133,6 +134,155 @@ def admin_headers(client, admin_user):
     response = client.post(
         "/api/auth/login",
         json={"username": "admin", "password": "admin123"}
+    )
+    token = response.json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture(scope="function")
+def test_category(db_session):
+    """创建测试分类"""
+    category = Category(
+        name="电子设备",
+        code="ELECTRONIC",
+        asset_type=AssetType.FIXED,
+        description="电子设备分类",
+        is_active=True,
+    )
+    db_session.add(category)
+    db_session.commit()
+    db_session.refresh(category)
+    return category
+
+
+@pytest.fixture(scope="function")
+def test_department(db_session):
+    """创建测试部门"""
+    department = Department(
+        name="技术部",
+        code="TECH",
+        description="技术部门",
+        is_active=True,
+    )
+    db_session.add(department)
+    db_session.commit()
+    db_session.refresh(department)
+    return department
+
+
+@pytest.fixture(scope="function")
+def test_employee(db_session, test_department):
+    """创建测试员工"""
+    employee = Employee(
+        employee_no="EMP001",
+        name="张三",
+        email="zhangsan@example.com",
+        phone="13800138000",
+        department_id=test_department.id,
+        position="工程师",
+        status="active",
+        is_active=True,
+    )
+    db_session.add(employee)
+    db_session.commit()
+    db_session.refresh(employee)
+    return employee
+
+
+@pytest.fixture(scope="function")
+def test_role(db_session):
+    """创建测试角色"""
+    role = Role(
+        name="资产管理员",
+        code="asset_admin",
+        description="负责资产管理",
+        is_active=True,
+        is_system=False,
+    )
+    db_session.add(role)
+    db_session.commit()
+    db_session.refresh(role)
+    return role
+
+
+@pytest.fixture(scope="function")
+def test_permission(db_session):
+    """创建测试权限"""
+    permission = Permission(
+        name="资产创建",
+        code="asset:create",
+        resource="asset",
+        action="create",
+        description="创建资产权限",
+        is_active=True,
+    )
+    db_session.add(permission)
+    db_session.commit()
+    db_session.refresh(permission)
+    return permission
+
+
+@pytest.fixture(scope="function")
+def user_with_asset_perms(db_session, test_role):
+    """创建有资产权限的用户"""
+    # 创建权限
+    perms = []
+    for resource, action in [("asset", "create"), ("asset", "update"), ("asset", "delete")]:
+        # 检查是否已存在
+        existing = db_session.query(Permission).filter(
+            Permission.code == f"{resource}:{action}"
+        ).first()
+        if existing:
+            perms.append(existing)
+        else:
+            perm = Permission(
+                name=f"{resource}:{action}",
+                code=f"{resource}:{action}",
+                resource=resource,
+                action=action,
+                is_active=True,
+            )
+            db_session.add(perm)
+            perms.append(perm)
+    db_session.commit()
+    for perm in perms:
+        db_session.refresh(perm)
+
+    # 创建角色
+    role = Role(
+        name="资产操作员",
+        code="asset_operator",
+        description="可操作资产",
+        is_active=True,
+        is_system=False,
+    )
+    role.permissions = perms
+    db_session.add(role)
+    db_session.commit()
+    db_session.refresh(role)
+
+    # 创建用户
+    user = User(
+        username="assetuser",
+        password_hash=get_password_hash("assetpass123"),
+        email="asset@example.com",
+        real_name="资产用户",
+        is_active=True,
+        is_superuser=False,
+    )
+    user.roles = [role]
+    db_session.add(user)
+    db_session.commit()
+    db_session.refresh(user)
+    return user
+
+
+@pytest.fixture(scope="function")
+def asset_user_headers(client, user_with_asset_perms):
+    """获取有资产权限用户的认证 header"""
+    response = client.post(
+        "/api/auth/login",
+        json={"username": "assetuser", "password": "assetpass123"}
     )
     token = response.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}

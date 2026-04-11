@@ -144,7 +144,7 @@ class Asset(Base):
     department = relationship("Department", back_populates="assets")
     user = relationship("Employee", back_populates="assets", foreign_keys=[user_id])
     keeper = relationship("Employee", back_populates="managed_assets", foreign_keys=[keeper_id])
-    records = relationship("AssetRecord", back_populates="asset")
+    records = relationship("AssetRecord", back_populates="asset", cascade="all, delete-orphan")
     repair_orders = relationship("RepairOrder", back_populates="asset")
 
 
