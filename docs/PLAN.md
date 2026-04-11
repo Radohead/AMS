@@ -169,3 +169,92 @@ PORT=8000
 ./start.sh lan         # 局域网
 ./start.sh production  # 云端
 ```
+
+---
+
+## 开发流程与版本管理
+
+> ⚠️ **重要原则：测试先行，模块完成后及时提交 Git**
+
+### 测试优先开发策略
+
+每个模块的开发遵循以下流程：
+
+```
+1. 需求分析 → 更新 PLAN_DETAIL.md
+2. 编写测试 → 在 tests/ 下编写测试用例
+3. 开发实现 → 实现功能代码
+4. 测试验证 → pytest 全部通过
+5. Git 提交 → 及时提交版本，记录完成状态
+```
+
+**为什么测试先行？**
+- 测试即文档 — 用例编号和描述明确了功能范围
+- 回归保护 — 新改动不会破坏已有功能
+- 增量验证 — 每个模块完成后立即确认可用
+- 进度可见 — 测试通过数直接反映完成度
+
+### Git 提交规范
+
+每次模块测试完成后，在 commit 前确认：
+
+```bash
+# 1. 确认所有测试通过
+cd backend && source venv/bin/activate && pytest tests/ -v
+
+# 2. 提交变更
+git add <changed files>
+git commit -m "feat: <模块名称> - <功能摘要>"
+git push  # 立即推送到远程
+```
+
+**提交信息格式：**
+```
+feat: <模块名称> - <功能摘要>
+
+## 具体内容
+- 改动1
+- 改动2
+
+测试用例: X 个，总计 Y 个
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+```
+
+**已验证的提交节点：**
+
+| Commit | 描述 | 测试数 |
+|--------|------|--------|
+| `05a7cea` | 测试基础设施 + 认证模块 | 11 |
+| `8887471` | Phase 2-3 CRUD 模块测试 | 86 |
+| `09aa4b2` | Phase 3 照片/附件/房地产 + 测试补全 | 119 |
+
+### 测试统计
+
+| 模块 | 测试文件 | 用例数 | 状态 |
+|------|----------|--------|------|
+| 认证 | test_auth.py | 11 | ✅ |
+| 用户管理 | test_users.py | 12 | ✅ |
+| 角色权限 | test_roles.py | 11 | ✅ |
+| 部门管理 | test_departments.py | 15 | ✅ |
+| 员工管理 | test_employees.py | 15 | ✅ |
+| 分类管理 | test_categories.py | 15 | ✅ |
+| 资产管理 | test_assets.py | 18 | ✅ |
+| 易耗品 | test_consumables.py | 8 | ✅ |
+| 报修管理 | test_repair.py | 4 | ✅ |
+| 报废管理 | test_scrap.py | 4 | ✅ |
+| 盘点管理 | test_inventory_check.py | 5 | ✅ |
+| **合计** | **11个测试文件** | **119** | ✅ |
+
+### 新模块开发 Checklist
+
+每个新模块开发前，确认以下清单：
+
+- [ ] 分析需求，更新 PLAN_DETAIL.md 用例
+- [ ] 创建测试文件 `tests/test_<module>.py`
+- [ ] 编写测试用例（参考现有文件格式）
+- [ ] 实现后端 API 和数据模型
+- [ ] 实现前端页面和组件
+- [ ] `pytest tests/test_<module>.py -v` 全部通过
+- [ ] `pytest tests/ -v` 完整套件全部通过
+- [ ] 更新 PLAN.md 模块状态为 ✅
+- [ ] `git add` + `git commit` + `git push`
