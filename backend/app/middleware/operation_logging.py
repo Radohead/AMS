@@ -50,7 +50,8 @@ class OperationLoggingMiddleware(BaseHTTPMiddleware):
             # 从 request.state 获取 db（由 get_db dependency 设置）
             db = getattr(request.state, "db", None)
 
-            write_operation_log(
+            if db is not None:
+                write_operation_log(
                     db=db,
                     user_id=user_id,
                     username=username,

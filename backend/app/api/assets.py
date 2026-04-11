@@ -673,3 +673,151 @@ async def get_asset_stats(
         "real_estate": real_estate,
         "total_value": total_value
     }
+
+
+@router.post("/import")
+async def import_assets(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission("asset", "create"))
+):
+    """
+    批量导入资产
+
+    接受 Excel 文件（.xlsx/.xls），解析后批量创建资产。
+
+    返回:
+    - total: 总行数
+    - success: 成功导入数
+    - failed: 失败数
+    - errors: 错误详情列表 [{row, field, message, value}]
+    - imported_assets: 成功导入的资产简报 [{id, asset_no, name}]
+    """
+    # 验证文件类型
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="未提供文件名")
+
+    ext = os.path.splitext(file.filename)[1].lower()
+    if ext not in (".xlsx", ".xls"):
+        raise HTTPException(
+            status_code=400,
+            detail=f"不支持的文件格式: {ext}，请上传 .xlsx 或 .xls 文件",
+        )
+
+    # 读取文件内容
+    content = await file.read()
+    if len(content) == 0:
+        raise HTTPException(status_code=400, detail="上传文件为空")
+
+    if len(content) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="文件大小不能超过 10MB")
+
+    # 解析 Excel
+    from app.utils.excel_import import (
+        parse_excel_file,
+        validate_asset_row,
+        AssetImportResult,
+    )
+
+    rows, parse_error = parse_excel_file(content)
+    if parse_error:
+        raise HTTPException(status_code=400, detail=parse_error)
+
+    if not rows:
+        raise HTTPException(status_code=400, detail="Excel 文件中没有数据行")
+
+    # 验证并导入
+    result = AssetImportResult(total=len(rows), success=0, failed=0)
+    imported_asset_ids: List[int] = []
+
+    for idx, row_data in enumerate(rows, start=1):
+        validated, errors = validate_asset_row(row_data, idx, db)
+
+        if errors:
+            result.failed += 1
+            result.errors.extend(errors)
+            continue
+
+        # 创建资产
+        try:
+            asset_no = generate_asset_no(validated["category_id"])
+            asset = Asset(
+                asset_no=asset_no,
+                name=validated["name"],
+                category_id=validated["category_id"],
+                asset_type=validated["asset_type"],
+                brand=validated.get("brand"),
+                model=validated.get("model"),
+                serial_no=validated.get("serial_no"),
+                purchase_date=validated.get("purchase_date"),
+                purchase_price=validated.get("purchase_price", 0.0),
+                warranty_end=validated.get("warranty_end"),
+                department_id=validated.get("department_id"),
+                location=validated.get("location"),
+                quantity=validated.get("quantity", 1),
+                unit=validated.get("unit"),
+                description=validated.get("description"),
+                remarks=validated.get("remarks"),
+                created_by=current_user.id,
+                qr_code=generate_qr_code(asset_no, validated["name"]),
+            )
+            db.add(asset)
+            db.flush()  # 获取资产 ID
+
+            # 记录变动
+            record = AssetRecord(
+                asset_id=asset.id,
+                action_type="create",
+                after_data="批量导入创建",
+                description=f"批量导入（文件名: {file.filename}）",
+                operator_id=current_user.id,
+            )
+            db.add(record)
+
+            result.success += 1
+            result.imported_assets.append({
+                "id": asset.id,
+                "asset_no": asset.asset_no,
+                "name": asset.name,
+            })
+            imported_asset_ids.append(asset.id)
+
+        except Exception as e:
+            result.failed += 1
+            from app.utils.excel_import import ImportError as ImportErrorClass
+            result.errors.append(ImportErrorClass(
+                row=idx,
+                field="system",
+                message=f"创建资产失败: {str(e)}",
+            ))
+
+    # 统一提交
+    db.commit()
+
+    return result.to_dict()
+
+
+@router.get("/import/template")
+async def download_import_template(
+    current_user: User = Depends(require_permission("asset", "create"))
+):
+    """
+    下载资产导入模板 Excel 文件
+    """
+    from fastapi.responses import StreamingResponse
+    from app.utils.excel_import import generate_import_template
+    from io import BytesIO
+
+    template_bytes = generate_import_template()
+    buffer = BytesIO(template_bytes)
+    buffer.seek(0)
+
+    from urllib.parse import quote
+    encoded_filename = quote("资产导入模板.xlsx")
+    return StreamingResponse(
+        buffer,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}"
+        },
+    )
