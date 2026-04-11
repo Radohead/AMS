@@ -12,11 +12,14 @@
 | 资产照片功能 | Sprint 4 | ✅ 已完成 | Phase 3.4 |
 | 资产附件功能 | Sprint 4 | ✅ 已完成 | Phase 3.5 |
 | 房地产资产 | Sprint 4 | ✅ 已完成 | Phase 3.6 |
-| 可扩展性增强 | Sprint 5 | 待开始 | Phase 5 |
+| 操作日志中间件 | Sprint 5.3 | ✅ 已完成 | Phase 5.3 |
+| 批量导入 | Sprint 5.4 | ✅ 已完成 | Phase 5.4 |
+| 批量导出 | Sprint 5.5 | ✅ 已完成 | Phase 5.5 |
+| 可扩展性增强 | Sprint 5 | 部分完成 | Phase 5 |
 
 ## 当前项目状态
 
-### 已完成 (~80%)
+### 已完成 (~85%)
 - Web端全部CRUD功能
 - 基础认证与权限
 - 资产流转（分配/调拨/退库）
@@ -24,9 +27,11 @@
 - 资产照片上传/展示/删除
 - 资产附件（PDF/文档）上传/展示/下载/删除
 - 房地产资产管理（含12个专用字段）
-- 测试体系（119个测试用例，覆盖11个模块）
+- 操作日志中间件
+- 批量导入/导出功能
+- 测试体系（139个测试用例，覆盖13个模块）
 
-### 待开发 (~20%)
+### 待开发 (~15%)
 - 自定义字段系统
 - 工作流字段配置
 - 操作日志
@@ -227,6 +232,9 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 | `05a7cea` | 测试基础设施 + 认证模块 | 11 |
 | `8887471` | Phase 2-3 CRUD 模块测试 | 86 |
 | `09aa4b2` | Phase 3 照片/附件/房地产 + 测试补全 | 119 |
+| `c6c5fcb` | Sprint 5.3 操作日志中间件 | - |
+| `2061cd3` | Sprint 5.4 批量导入功能 | +7 |
+| `25f0bae` | Sprint 5.5 批量导出功能 | +7 |
 
 ### 测试统计
 
@@ -243,7 +251,10 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 | 报修管理 | test_repair.py | 4 | ✅ |
 | 报废管理 | test_scrap.py | 4 | ✅ |
 | 盘点管理 | test_inventory_check.py | 5 | ✅ |
-| **合计** | **11个测试文件** | **119** | ✅ |
+| 操作日志 | test_operation_logs.py | 3 | ✅ |
+| 批量导入 | test_batch_import.py | 7 | ✅ |
+| 批量导出 | test_batch_export.py | 7 | ✅ |
+| **合计** | **13个测试文件** | **139** | ✅ |
 
 ### 新模块开发 Checklist
 
