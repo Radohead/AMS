@@ -45,6 +45,7 @@ async def login(
     if not user or not verify_password(login_data.password, user.password_hash):
         log.status = "failed"
         log.fail_reason = "Invalid username or password"
+        log.user_id = None
         db.add(log)
         db.commit()
         raise HTTPException(
@@ -55,6 +56,7 @@ async def login(
     if not user.is_active:
         log.status = "failed"
         log.fail_reason = "User is inactive"
+        log.user_id = user.id
         db.add(log)
         db.commit()
         raise HTTPException(

@@ -88,7 +88,7 @@ class LoginLog(Base):
     __tablename__ = "login_logs"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     username = Column(String(50), nullable=False)
     ip_address = Column(String(50), nullable=True)
     user_agent = Column(String(500), nullable=True)
