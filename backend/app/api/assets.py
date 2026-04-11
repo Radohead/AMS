@@ -821,3 +821,83 @@ async def download_import_template(
             "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}"
         },
     )
+
+
+@router.post("/export")
+async def export_assets(
+    format: str = Query("xlsx", description="导出格式: xlsx 或 csv"),
+    keyword: Optional[str] = Query(None, description="搜索关键词"),
+    category_id: Optional[int] = Query(None, description="分类ID"),
+    department_id: Optional[int] = Query(None, description="部门ID"),
+    user_id: Optional[int] = Query(None, description="使用人ID"),
+    status: Optional[str] = Query(None, description="资产状态"),
+    asset_type: Optional[str] = Query(None, description="资产类型"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission("asset", "read"))
+):
+    """
+    批量导出资产
+
+    支持筛选条件：
+    - keyword: 搜索关键词（资产名称/编码/序列号）
+    - category_id: 分类ID
+    - department_id: 部门ID
+    - user_id: 使用人ID
+    - status: 资产状态
+    - asset_type: 资产类型
+
+    导出格式：
+    - xlsx: Excel 格式（默认）
+    - csv: CSV 格式
+    """
+    from fastapi.responses import StreamingResponse
+    from app.utils.excel_export import (
+        export_assets_to_excel,
+        export_assets_to_csv,
+        generate_export_filename,
+    )
+
+    format = format.lower()
+    if format not in ("xlsx", "csv"):
+        raise HTTPException(
+            status_code=400,
+            detail="不支持的导出格式，请使用 xlsx 或 csv"
+        )
+
+    if format == "xlsx":
+        content = export_assets_to_excel(
+            db=db,
+            keyword=keyword,
+            category_id=category_id,
+            department_id=department_id,
+            user_id=user_id,
+            status=status,
+            asset_type=asset_type,
+        )
+        media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    else:
+        content = export_assets_to_csv(
+            db=db,
+            keyword=keyword,
+            category_id=category_id,
+            department_id=department_id,
+            user_id=user_id,
+            status=status,
+            asset_type=asset_type,
+        )
+        media_type = "text/csv; charset=utf-8-sig"
+
+    filename = generate_export_filename(format)
+    from urllib.parse import quote
+    encoded_filename = quote(filename)
+
+    buffer = BytesIO(content)
+    buffer.seek(0)
+
+    return StreamingResponse(
+        buffer,
+        media_type=media_type,
+        headers={
+            "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}"
+        },
+    )
