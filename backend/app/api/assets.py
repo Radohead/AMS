@@ -3,6 +3,7 @@
 """
 import json
 import uuid
+import os
 import qrcode
 from io import BytesIO
 import base64
@@ -15,6 +16,7 @@ from sqlalchemy import or_, and_, func
 
 from app.core.database import get_db
 from app.core.security import get_current_user, require_permission
+from app.core.config import settings
 from app.models.asset import Asset, AssetRecord, AssetStatus, AssetType
 from app.models.user import User
 from app.schemas.asset import (
@@ -206,7 +208,10 @@ async def update_asset(
     # 更新字段
     update_data = asset_data.model_dump(exclude_unset=True)
     for key, value in update_data.items():
-        setattr(asset, key, value)
+        if key == "images" and value is not None:
+            setattr(asset, key, json.dumps(value))
+        else:
+            setattr(asset, key, value)
 
     db.commit()
     db.refresh(asset)
@@ -444,23 +449,195 @@ async def upload_asset_photos(
         if file.size > 10 * 1024 * 1024:
             raise HTTPException(status_code=400, detail=f"File {file.filename} is too large")
 
-        # 保存文件
-        import os
-        from app.core.config import settings
-
-        file_path = f"{settings.UPLOAD_DIR}/assets/{asset.asset_no}_{file.filename}"
+        # 生成唯一文件名
+        ext = os.path.splitext(file.filename)[1].lower()
+        unique_filename = f"{uuid.uuid4().hex}{ext}"
+        relative_path = f"assets/{asset.asset_no}_{unique_filename}"
+        file_path = f"{settings.UPLOAD_DIR}/{relative_path}"
         os.makedirs(os.path.dirname(file_path), exist_ok=True)
 
         with open(file_path, "wb") as f:
             content = await file.read()
             f.write(content)
 
-        existing_images.append(file_path)
+        # 存储可访问的 URL 路径
+        existing_images.append(f"/uploads/{relative_path}")
 
     asset.images = json.dumps(existing_images)
     db.commit()
 
     return {"message": "Photos uploaded successfully", "images": existing_images}
+
+
+@router.delete("/{asset_id}/photos")
+async def delete_asset_photo(
+    asset_id: int,
+    url: str = Query(..., description="要删除的图片URL"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission("asset", "update"))
+):
+    """删除资产照片"""
+    asset = db.query(Asset).filter(Asset.id == asset_id).first()
+    if not asset:
+        raise HTTPException(status_code=404, detail="Asset not found")
+
+    existing_images = json.loads(asset.images) if asset.images else []
+
+    if url not in existing_images:
+        raise HTTPException(status_code=404, detail="Image not found")
+
+    # 删除物理文件
+    file_path = os.path.join(settings.UPLOAD_DIR, url.lstrip("/uploads/"))
+    if os.path.exists(file_path):
+        os.remove(file_path)
+
+    # 更新数据库
+    existing_images.remove(url)
+    asset.images = json.dumps(existing_images) if existing_images else None
+    db.commit()
+
+    return {"message": "Photo deleted successfully", "images": existing_images}
+
+
+@router.post("/{asset_id}/attachments")
+async def upload_asset_attachments(
+    asset_id: int,
+    files: List[UploadFile] = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission("asset", "update"))
+):
+    """上传资产附件"""
+    asset = db.query(Asset).filter(Asset.id == asset_id).first()
+    if not asset:
+        raise HTTPException(status_code=404, detail="Asset not found")
+
+    # 获取现有附件
+    existing_attachments = json.loads(asset.attachments) if asset.attachments else []
+
+    # 检查附件数量限制
+    if len(existing_attachments) + len(files) > 20:
+        raise HTTPException(status_code=400, detail="Maximum 20 attachments allowed")
+
+    # 支持的文件类型
+    ALLOWED_TYPES = {".pdf", ".doc", ".docx", ".xls", ".xlsx", ".jpg", ".jpeg", ".png"}
+    MAX_FILE_SIZE = 20 * 1024 * 1024  # 20MB
+
+    # 保存新附件
+    for file in files:
+        # 检查文件类型
+        ext = os.path.splitext(file.filename)[1].lower()
+        if ext not in ALLOWED_TYPES:
+            raise HTTPException(status_code=400, detail=f"File type {ext} not allowed")
+
+        # 检查文件大小
+        if file.size > MAX_FILE_SIZE:
+            raise HTTPException(status_code=400, detail=f"File {file.filename} is too large (max 20MB)")
+
+        # 生成唯一文件名
+        unique_filename = f"{uuid.uuid4().hex}{ext}"
+        file_dir = f"{settings.UPLOAD_DIR}/attachments/{asset.asset_no}"
+        os.makedirs(file_dir, exist_ok=True)
+        file_path = os.path.join(file_dir, unique_filename)
+
+        # 保存文件
+        with open(file_path, "wb") as f:
+            content = await file.read()
+            f.write(content)
+
+        # 添加附件信息
+        from datetime import datetime
+        attachment_info = {
+            "name": file.filename,
+            "url": f"/api/assets/attachments/{asset_id}/{unique_filename}",
+            "type": ext[1:],  # 去掉点
+            "size": len(content),
+            "uploaded_at": datetime.utcnow().isoformat()
+        }
+        existing_attachments.append(attachment_info)
+
+    asset.attachments = json.dumps(existing_attachments)
+    db.commit()
+
+    return {"message": "Attachments uploaded successfully", "attachments": existing_attachments}
+
+
+@router.get("/{asset_id}/attachments")
+async def list_asset_attachments(
+    asset_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """获取资产附件列表"""
+    asset = db.query(Asset).filter(Asset.id == asset_id).first()
+    if not asset:
+        raise HTTPException(status_code=404, detail="Asset not found")
+
+    attachments = json.loads(asset.attachments) if asset.attachments else []
+    return attachments
+
+
+@router.delete("/{asset_id}/attachments/{filename}")
+async def delete_asset_attachment(
+    asset_id: int,
+    filename: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission("asset", "update"))
+):
+    """删除资产附件"""
+    asset = db.query(Asset).filter(Asset.id == asset_id).first()
+    if not asset:
+        raise HTTPException(status_code=404, detail="Asset not found")
+
+    attachments = json.loads(asset.attachments) if asset.attachments else []
+
+    # 找到要删除的附件
+    attachment_to_delete = None
+    for att in attachments:
+        if filename in att.get("url", ""):
+            attachment_to_delete = att
+            break
+
+    if not attachment_to_delete:
+        raise HTTPException(status_code=404, detail="Attachment not found")
+
+    # 删除物理文件
+    file_path = os.path.join(settings.UPLOAD_DIR, "attachments", asset.asset_no, filename)
+    if os.path.exists(file_path):
+        os.remove(file_path)
+
+    # 从列表中移除
+    attachments = [att for att in attachments if filename not in att.get("url", "")]
+    asset.attachments = json.dumps(attachments) if attachments else None
+    db.commit()
+
+    return {"message": "Attachment deleted successfully"}
+
+
+@router.get("/attachments/{asset_id}/{filename}")
+async def download_attachment(
+    asset_id: int,
+    filename: str,
+    db: Session = Depends(get_db)
+):
+    """下载资产附件"""
+    asset = db.query(Asset).filter(Asset.id == asset_id).first()
+    if not asset:
+        raise HTTPException(status_code=404, detail="Asset not found")
+
+    file_path = os.path.join(settings.UPLOAD_DIR, "attachments", asset.asset_no, filename)
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="File not found")
+
+    # 获取原始文件名
+    attachments = json.loads(asset.attachments) if asset.attachments else []
+    original_name = filename
+    for att in attachments:
+        if filename in att.get("url", ""):
+            original_name = att.get("name", filename)
+            break
+
+    from fastapi.responses import FileResponse
+    return FileResponse(file_path, filename=original_name)
 
 
 @router.get("/stats/overview")
@@ -478,6 +655,7 @@ async def get_asset_stats(
     # 按类型统计
     fixed = db.query(Asset).filter(Asset.asset_type == "fixed").count()
     consumable = db.query(Asset).filter(Asset.asset_type == "consumable").count()
+    real_estate = db.query(Asset).filter(Asset.asset_type == "real_estate").count()
 
     # 总价值
     total_value = db.query(Asset).with_entities(
@@ -492,5 +670,6 @@ async def get_asset_stats(
         "scrapped": scrapped,
         "fixed": fixed,
         "consumable": consumable,
+        "real_estate": real_estate,
         "total_value": total_value
     }

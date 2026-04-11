@@ -7,12 +7,12 @@
 
 | 模块 | Sprint | 状态 | 详细章节 |
 |------|--------|------|----------|
-| 测试基础设施 | Sprint 1 | 待开始 | Phase 1 |
-| Web端CRUD测试 | Sprint 2-3 | 待开始 | Phase 2-4 |
-| 可扩展性增强 | Sprint 4 | 待开始 | Phase 5 |
-| 移动端H5 | Sprint 5 | 待开始 | Phase 6 |
-| 微信小程序 | Sprint 6 | 待开始 | Phase 6 |
-| 二维码管理 | Sprint 7 | 待开始 | Phase 7 |
+| 测试基础设施 | Sprint 1 | ✅ 已完成 | Phase 1 |
+| Web端CRUD测试 | Sprint 2-3 | ✅ 已完成 | Phase 2-4 |
+| 资产照片功能 | Sprint 4 | ✅ 已完成 | Phase 3.4 |
+| 资产附件功能 | Sprint 4 | ✅ 已完成 | Phase 3.5 |
+| 房地产资产 | Sprint 4 | ✅ 已完成 | Phase 3.6 |
+| 可扩展性增强 | Sprint 5 | 待开始 | Phase 5 |
 
 ## 当前项目状态
 
@@ -21,12 +21,17 @@
 - 基础认证与权限
 - 资产流转（分配/调拨/退库）
 - 报修/报废/盘点流程
+- 资产照片上传/展示/删除
+- 资产附件（PDF/文档）上传/展示/下载/删除
+- 房地产资产管理（含12个专用字段）
+- 测试体系（119个测试用例，覆盖11个模块）
 
 ### 待开发 (~20%)
-- 测试体系
 - 自定义字段系统
+- 工作流字段配置
 - 操作日志
-- 移动端
+- 批量导入/导出
+- 移动端H5/微信小程序
 - 二维码管理
 
 ---
@@ -64,6 +69,25 @@
 | 报修管理 | `tests/test_repair.py` | 3 |
 | 报废管理 | `tests/test_scrap.py` | 4 |
 | 盘点管理 | `tests/test_inventory_check.py` | 5 |
+
+---
+
+## Phase 3: 资产功能增强
+
+### Phase 3.4: 资产照片功能
+- AssetForm.vue 添加图片上传组件
+- AssetList.vue 添加缩略图
+- AssetUpdate schema 支持 images
+
+### Phase 3.5: 资产附件功能 (PDF/文档)
+- Asset.attachments 字段
+- PDF/Word/Excel 上传下载
+- 房产证等文档管理
+
+### Phase 3.6: 房地产资产管理
+- AssetType.REAL_ESTATE 类型
+- 房产专用字段（地址/面积/产权证号）
+- 房地产统计报表
 
 ---
 

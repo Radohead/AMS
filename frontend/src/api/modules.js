@@ -44,6 +44,26 @@ export const assetApi = {
     })
   },
 
+  // 删除资产照片
+  deletePhoto: (id, url) => {
+    return api.delete(`/assets/${id}/photos`, { params: { url } })
+  },
+
+  // 上传资产附件
+  uploadAttachments: (id, files) => {
+    const formData = new FormData()
+    files.forEach(file => formData.append('files', file))
+    return api.post(`/assets/${id}/attachments`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+  },
+
+  // 获取资产附件列表
+  getAttachments: (id) => api.get(`/assets/${id}/attachments`),
+
+  // 删除资产附件
+  deleteAttachment: (id, filename) => api.delete(`/assets/${id}/attachments/${filename}`),
+
   // 获取资产统计
   getStats: () => api.get('/assets/stats/overview')
 }

@@ -35,6 +35,7 @@
           <el-select v-model="searchForm.asset_type" placeholder="请选择类型" clearable>
             <el-option label="固定资产" value="fixed" />
             <el-option label="易耗品" value="consumable" />
+            <el-option label="房地产" value="real_estate" />
           </el-select>
         </el-form-item>
         <el-form-item>
@@ -46,6 +47,19 @@
 
     <!-- 数据表格 -->
     <el-table :data="tableData" v-loading="loading" stripe>
+      <el-table-column label="缩略图" width="80">
+        <template #default="{ row }">
+          <el-image
+            v-if="getFirstImage(row)"
+            :src="getFirstImage(row)"
+            fit="cover"
+            style="width: 50px; height: 50px; border-radius: 4px;"
+          />
+          <div v-else class="no-thumb">
+            <el-icon><Picture /></el-icon>
+          </div>
+        </template>
+      </el-table-column>
       <el-table-column prop="asset_no" label="资产编码" width="150" />
       <el-table-column prop="name" label="资产名称" min-width="150" show-overflow-tooltip />
       <el-table-column label="分类" width="120">
@@ -58,7 +72,7 @@
       <el-table-column label="类型" width="90">
         <template #default="{ row }">
           <el-tag :class="'type-tag type-' + row.asset_type" size="small">
-            {{ row.asset_type === 'fixed' ? '固定资产' : '易耗品' }}
+            {{ row.asset_type === 'fixed' ? '固定资产' : row.asset_type === 'consumable' ? '易耗品' : row.asset_type === 'real_estate' ? '房地产' : row.asset_type }}
           </el-tag>
         </template>
       </el-table-column>
@@ -208,10 +222,31 @@ function getStatusLabel(status) {
   }
   return labels[status] || status
 }
+
+function getFirstImage(row) {
+  if (!row.images) return null
+  try {
+    const images = typeof row.images === 'string' ? JSON.parse(row.images) : row.images
+    return images.length > 0 ? images[0] : null
+  } catch {
+    return null
+  }
+}
 </script>
 
 <style scoped>
 .asset-list {
+  .no-thumb {
+    width: 50px;
+    height: 50px;
+    border-radius: 4px;
+    background: #f5f7fa;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #c0c4cc;
+    font-size: 20px;
+  }
   .page-header {
     display: flex;
     justify-content: space-between;

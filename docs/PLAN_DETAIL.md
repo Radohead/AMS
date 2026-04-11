@@ -101,24 +101,124 @@ class WorkflowFieldConfig(Base):
 
 | 模块 | 文件位置 | 功能清单 | 状态 |
 |------|----------|----------|------|
-| 1.1 用户认证与权限 | `app/api/auth.py` | 登录/注册/密码修改/权限获取 | 已实现 |
-| 1.2 用户管理 | `app/api/permissions.py` | CRUD/角色分配/禁用 | 已实现 |
-| 1.3 角色权限 | `app/api/permissions.py` | 角色CRUD/权限绑定 | 已实现 |
+| 1.1 用户认证与权限 | `app/api/auth.py` | 登录/注册/密码修改/权限获取 | ✅ 已实现 (11测试) |
+| 1.2 用户管理 | `app/api/permissions.py` | CRUD/角色分配/禁用 | ✅ 已实现 (12测试) |
+| 1.3 角色权限 | `app/api/permissions.py` | 角色CRUD/权限绑定 | ✅ 已实现 (11测试) |
 
 ### Phase 2: 组织架构层
 
 | 模块 | 文件位置 | 功能清单 | 状态 |
 |------|----------|----------|------|
-| 2.1 部门管理 | `app/api/departments.py` | 树形部门CRUD/删除检查 | 已实现 |
-| 2.2 员工管理 | `app/api/employees.py` | 员工CRUD/软删除 | 已实现 |
+| 2.1 部门管理 | `app/api/departments.py` | 树形部门CRUD/删除检查 | ✅ 已实现 (15测试) |
+| 2.2 员工管理 | `app/api/employees.py` | 员工CRUD/软删除 | ✅ 已实现 (15测试) |
 
 ### Phase 3: 资产基础层
 
 | 模块 | 文件位置 | 功能清单 | 状态 |
 |------|----------|----------|------|
-| 3.1 分类管理 | `app/api/categories.py` | 多级分类CRUD | 已实现 |
-| 3.2 资产登记 | `app/api/assets.py` | CRUD/二维码/照片上传 | 已实现 |
-| 3.3 资产流转 | `app/api/assets.py` | 分配/调拨/退库 | 已实现 |
+| 3.1 分类管理 | `app/api/categories.py` | 多级分类CRUD | ✅ 已实现 (15测试) |
+| 3.2 资产登记 | `app/api/assets.py` | CRUD/二维码/照片上传 | ✅ 已实现 (18测试) |
+| 3.3 资产流转 | `app/api/assets.py` | 分配/调拨/退库 | ✅ 已实现 |
+| 3.4 资产照片 | `app/api/assets.py` | 照片上传/展示/删除/更新 | ✅ 后端完成，前端完成 |
+| 3.5 资产附件 | `app/api/assets.py` | PDF/文档上传/管理 | ✅ 后端完成，前端完成 |
+| 3.6 房地产资产 | `app/models/asset.py` | 房产专用字段支持 | ✅ 完成 |
+
+### Phase 3.5: 资产附件功能（PDF/文档管理）
+
+> 资产管理中，特别是房地产类资产，需要保存房产证扫描件等 PDF 附件作为重要资料
+
+#### 功能需求
+
+| 功能 | 描述 | 优先级 |
+|------|------|--------|
+| 附件上传 | 支持 PDF/Word/Excel/图片上传 | 高 |
+| 附件展示 | 列表展示文件名、类型、大小 | 高 |
+| 附件下载 | 在线预览/下载附件 | 高 |
+| 附件删除 | 删除不需要的附件 | 中 |
+| 权限控制 | 需要编辑权限才能操作 | 中 |
+
+#### 支持的文件类型
+
+- PDF (.pdf)
+- Word (.doc, .docx)
+- Excel (.xls, .xlsx)
+- 图片 (.jpg, .png)
+
+#### 限制条件
+
+- 单文件大小：不超过 20MB
+- 单个资产附件数量：最多 20 个
+
+#### API 设计
+
+```
+POST   /api/assets/{asset_id}/attachments           # 上传附件（支持多文件）
+GET    /api/assets/{asset_id}/attachments           # 获取附件列表
+DELETE /api/assets/{asset_id}/attachments/{filename} # 删除附件
+GET    /uploads/attachments/{filename}              # 下载附件
+```
+
+#### 存储结构
+
+```
+uploads/
+├── assets/              # 资产照片
+├── attachments/          # 资产附件
+│   └── {asset_no}/
+│       ├── 房产证.pdf
+│       ├── 土地证.pdf
+│       └── 购置合同.docx
+```
+
+### Phase 3.6: 房地产类资产管理
+
+> 原始需求文档明确规划了房产管理需求："房地产需记录'面积/权证编号'"
+
+#### 房地产特有字段
+
+| 字段 | 说明 | 优先级 |
+|------|------|--------|
+| address | 详细地址（省市区街道门牌） | 高 |
+| area | 建筑面积（平方米） | 高 |
+| property_type | 产权类型（商品房/经适房/公房/自建） | 高 |
+| property_no | 产权证号/不动产权证编号 | 高 |
+| land_no | 土地证号 | 中 |
+| building_no | 楼栋号 | 中 |
+| floor | 楼层 | 中 |
+| room_no | 房间号 | 中 |
+| usage | 用途（办公/生产/仓储/住宅） | 中 |
+| land_area | 占地面积（平方米） | 低 |
+| build_year | 建成年份 | 低 |
+| structure | 建筑结构（钢/混凝土/砖木） | 低 |
+
+#### 实现方案
+
+扩展 Asset 模型，新增 `REAL_ESTATE` 资产类型：
+
+```python
+class AssetType(str, enum.Enum):
+    FIXED = "fixed"           # 固定资产
+    CONSUMABLE = "consumable" # 易耗品
+    REAL_ESTATE = "real_estate"  # 房地产 [新增]
+
+class Asset(Base):
+    # ... 现有字段 ...
+
+    # 房地产专用字段 [新增]
+    address = Column(String(500), comment="详细地址")
+    area = Column(Float, comment="建筑面积(平方米)")
+    property_type = Column(String(50), comment="产权类型")
+    property_no = Column(String(100), comment="产权证号")
+    # ...
+```
+
+#### 验收标准
+
+1. ✅ 可创建资产类型为"房地产"的资产
+2. ✅ 可填写详细地址、面积、产权证号等字段
+3. ✅ 资产列表可按资产类型筛选房地产
+4. ✅ 资产详情页正确展示房地产信息
+5. ✅ 统计报表包含房地产资产统计
 
 ### Phase 4: 业务功能层
 
@@ -333,16 +433,18 @@ TEST-AUTH-005: test_unauthorized_access
 
 | 模块 | 测试文件 | 测试用例数 |
 |------|----------|-----------|
-| 用户管理 | `tests/test_users.py` | 5 |
-| 角色权限 | `tests/test_roles.py` | 4 |
-| 部门管理 | `tests/test_departments.py` | 4 |
-| 员工管理 | `tests/test_employees.py` | 4 |
-| 分类管理 | `tests/test_categories.py` | 4 |
-| 资产管理 | `tests/test_assets.py` | 7 |
-| 易耗品 | `tests/test_consumables.py` | 5 |
-| 报修管理 | `tests/test_repair.py` | 3 |
+| 用户管理 | `tests/test_users.py` | 12 |
+| 角色权限 | `tests/test_roles.py` | 11 |
+| 部门管理 | `tests/test_departments.py` | 15 |
+| 员工管理 | `tests/test_employees.py` | 15 |
+| 分类管理 | `tests/test_categories.py` | 15 |
+| 资产管理 | `tests/test_assets.py` | 18 |
+| 易耗品 | `tests/test_consumables.py` | 8 |
+| 报修管理 | `tests/test_repair.py` | 4 |
 | 报废管理 | `tests/test_scrap.py` | 4 |
 | 盘点管理 | `tests/test_inventory_check.py` | 5 |
+| 认证模块 | `tests/test_auth.py` | 11 |
+| **合计** | **11个测试文件** | **119** |
 
 ---
 
@@ -550,10 +652,12 @@ class QrcodeBinding(Base):
 ### Sprint 1: 测试基础设施
 - pytest 框架搭建
 - 认证模块测试
+- **✅ 已完成** (11个测试用例)
 
 ### Sprint 2-3: Web端CRUD测试
 - Phase 2-4 所有模块测试
 - 覆盖率目标 80%
+- **✅ 已完成** (119个测试用例，覆盖11个模块)
 
 ### Sprint 4: 可扩展性增强
 - 自定义字段系统

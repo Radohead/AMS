@@ -39,6 +39,7 @@
               <el-radio-group v-model="form.asset_type">
                 <el-radio label="fixed">固定资产</el-radio>
                 <el-radio label="consumable">易耗品</el-radio>
+                <el-radio label="real_estate">房地产</el-radio>
               </el-radio-group>
             </el-form-item>
           </el-col>
@@ -142,6 +143,114 @@
           </el-col>
         </el-row>
 
+        <!-- 房地产专用字段 -->
+        <template v-if="form.asset_type === 'real_estate'">
+          <el-divider content-position="left">房地产信息</el-divider>
+          <el-row :gutter="20">
+            <el-col :span="24">
+              <el-form-item label="详细地址">
+                <el-input v-model="form.address" placeholder="请输入详细地址（省市区街道门牌）" />
+              </el-form-item>
+            </el-col>
+          </el-row>
+          <el-row :gutter="20">
+            <el-col :span="8">
+              <el-form-item label="建筑面积(m²)">
+                <el-input-number v-model="form.area" :min="0" :precision="2" style="width: 100%" />
+              </el-form-item>
+            </el-col>
+            <el-col :span="8">
+              <el-form-item label="占地面积(m²)">
+                <el-input-number v-model="form.land_area" :min="0" :precision="2" style="width: 100%" />
+              </el-form-item>
+            </el-col>
+            <el-col :span="8">
+              <el-form-item label="建成年份">
+                <el-input-number v-model="form.build_year" :min="1900" :max="2100" style="width: 100%" />
+              </el-form-item>
+            </el-col>
+          </el-row>
+          <el-row :gutter="20">
+            <el-col :span="8">
+              <el-form-item label="产权类型">
+                <el-select v-model="form.property_type" placeholder="请选择" clearable style="width: 100%">
+                  <el-option label="商品房" value="商品房" />
+                  <el-option label="经济适用房" value="经济适用房" />
+                  <el-option label="公房" value="公房" />
+                  <el-option label="自建房" value="自建房" />
+                </el-select>
+              </el-form-item>
+            </el-col>
+            <el-col :span="8">
+              <el-form-item label="产权证号">
+                <el-input v-model="form.property_no" placeholder="不动产权证编号" />
+              </el-form-item>
+            </el-col>
+            <el-col :span="8">
+              <el-form-item label="土地证号">
+                <el-input v-model="form.land_no" placeholder="土地证号" />
+              </el-form-item>
+            </el-col>
+          </el-row>
+          <el-row :gutter="20">
+            <el-col :span="6">
+              <el-form-item label="楼栋号">
+                <el-input v-model="form.building_no" placeholder="楼栋号" />
+              </el-form-item>
+            </el-col>
+            <el-col :span="6">
+              <el-form-item label="楼层">
+                <el-input v-model="form.floor" placeholder="如: 1-3层" />
+              </el-form-item>
+            </el-col>
+            <el-col :span="6">
+              <el-form-item label="房间号">
+                <el-input v-model="form.room_no" placeholder="房间号" />
+              </el-form-item>
+            </el-col>
+            <el-col :span="6">
+              <el-form-item label="用途">
+                <el-select v-model="form.usage" placeholder="请选择" clearable style="width: 100%">
+                  <el-option label="办公" value="办公" />
+                  <el-option label="生产" value="生产" />
+                  <el-option label="仓储" value="仓储" />
+                  <el-option label="住宅" value="住宅" />
+                </el-select>
+              </el-form-item>
+            </el-col>
+          </el-row>
+          <el-row :gutter="20">
+            <el-col :span="8">
+              <el-form-item label="建筑结构">
+                <el-select v-model="form.structure" placeholder="请选择" clearable style="width: 100%">
+                  <el-option label="钢结构" value="钢结构" />
+                  <el-option label="钢筋混凝土" value="钢筋混凝土" />
+                  <el-option label="砖混结构" value="砖混结构" />
+                  <el-option label="砖木结构" value="砖木结构" />
+                </el-select>
+              </el-form-item>
+            </el-col>
+          </el-row>
+        </template>
+
+        <el-divider content-position="left">资产照片</el-divider>
+        <el-form-item label="上传照片">
+          <el-upload
+            ref="uploadRef"
+            :auto-upload="false"
+            :limit="10"
+            :on-change="handlePhotoChange"
+            :on-remove="handlePhotoRemove"
+            :file-list="photoFileList"
+            accept="image/jpeg,image/png,image/jpg"
+            list-type="picture-card"
+            :before-remove="beforePhotoRemove"
+          >
+            <el-icon><Plus /></el-icon>
+          </el-upload>
+          <div class="upload-tip">支持 JPG/PNG 格式，单张不超过 10MB，最多10张</div>
+        </el-form-item>
+
         <el-divider content-position="left">其他信息</el-divider>
 
         <el-form-item label="资产描述">
@@ -183,9 +292,13 @@ const router = useRouter()
 const route = useRoute()
 
 const formRef = ref()
+const uploadRef = ref()
 const saving = ref(false)
+const uploading = ref(false)
 const categoryTree = ref([])
 const departmentList = ref([])
+const photoFileList = ref([])
+const pendingPhotos = ref([]) // 待上传的新照片文件
 
 const isEdit = computed(() => !!route.params.id)
 
@@ -205,7 +318,20 @@ const form = reactive({
   current_stock: 0,
   min_stock: 0,
   description: '',
-  remarks: ''
+  remarks: '',
+  // 房地产专用字段
+  address: '',
+  area: null,
+  land_area: null,
+  property_type: '',
+  property_no: '',
+  land_no: '',
+  building_no: '',
+  floor: '',
+  room_no: '',
+  usage: '',
+  build_year: null,
+  structure: ''
 })
 
 const rules = {
@@ -247,6 +373,11 @@ async function loadData() {
         form[key] = res[key]
       }
     })
+    // 加载已有图片
+    if (res.images) {
+      const existingImages = typeof res.images === 'string' ? JSON.parse(res.images) : res.images
+      photoFileList.value = existingImages.map(url => ({ url, name: url.split('/').pop() }))
+    }
   } catch (error) {
     ElMessage.error('加载数据失败')
   }
@@ -258,12 +389,21 @@ async function handleSubmit() {
 
   saving.value = true
   try {
+    let assetId = route.params.id
     if (isEdit.value) {
       await assetApi.update(route.params.id, form)
       ElMessage.success('保存成功')
     } else {
-      await assetApi.create(form)
+      const created = await assetApi.create(form)
+      assetId = created.id
       ElMessage.success('创建成功')
+    }
+    // 上传待上传的新照片
+    if (pendingPhotos.value.length > 0 && assetId) {
+      uploading.value = true
+      await assetApi.uploadPhotos(assetId, pendingPhotos.value)
+      uploading.value = false
+      ElMessage.success('照片上传成功')
     }
     router.push('/assets')
   } catch (error) {
@@ -271,6 +411,28 @@ async function handleSubmit() {
   } finally {
     saving.value = false
   }
+}
+
+function handlePhotoChange(file, fileList) {
+  pendingPhotos.value = fileList.filter(f => !f.url)
+}
+
+function handlePhotoRemove(file, fileList) {
+  pendingPhotos.value = fileList.filter(f => !f.url)
+}
+
+async function beforePhotoRemove(file) {
+  // 已上传的照片，需要调用后端删除
+  if (file.url) {
+    try {
+      await assetApi.deletePhoto(route.params.id, file.url)
+      return true
+    } catch (error) {
+      ElMessage.error('删除照片失败')
+      return false
+    }
+  }
+  return true
 }
 
 function goBack() {
@@ -294,6 +456,12 @@ function goBack() {
 
   .asset-form-content {
     max-width: 900px;
+  }
+
+  .upload-tip {
+    font-size: 12px;
+    color: #909399;
+    margin-top: 8px;
   }
 }
 </style>

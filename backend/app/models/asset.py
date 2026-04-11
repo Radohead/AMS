@@ -12,6 +12,7 @@ class AssetType(str, enum.Enum):
     """资产类型"""
     FIXED = "fixed"           # 固定资产
     CONSUMABLE = "consumable" # 易耗品
+    REAL_ESTATE = "real_estate"  # 房地产
 
 
 class AssetStatus(str, enum.Enum):
@@ -128,8 +129,25 @@ class Asset(Base):
     # 图片
     images = Column(Text, nullable=True, comment="图片URLs JSON数组")
 
+    # 附件
+    attachments = Column(Text, nullable=True, comment="附件JSON: [{name, url, type, size, uploaded_at}]")
+
     # 自定义属性
     custom_fields = Column(Text, nullable=True, comment="自定义字段JSON")
+
+    # 房地产专用字段
+    address = Column(String(500), nullable=True, comment="详细地址")
+    area = Column(Float, nullable=True, comment="建筑面积(平方米)")
+    land_area = Column(Float, nullable=True, comment="占地面积(平方米)")
+    property_type = Column(String(50), nullable=True, comment="产权类型")
+    property_no = Column(String(100), nullable=True, comment="产权证号")
+    land_no = Column(String(100), nullable=True, comment="土地证号")
+    building_no = Column(String(50), nullable=True, comment="楼栋号")
+    floor = Column(String(20), nullable=True, comment="楼层")
+    room_no = Column(String(50), nullable=True, comment="房间号")
+    usage = Column(String(50), nullable=True, comment="用途")
+    build_year = Column(Integer, nullable=True, comment="建成年份")
+    structure = Column(String(50), nullable=True, comment="建筑结构")
 
     # 描述
     description = Column(Text, nullable=True, comment="资产描述")

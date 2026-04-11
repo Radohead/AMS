@@ -10,6 +10,7 @@ from enum import Enum
 class AssetType(str, Enum):
     FIXED = "fixed"
     CONSUMABLE = "consumable"
+    REAL_ESTATE = "real_estate"
 
 
 class AssetStatus(str, Enum):
@@ -144,6 +145,19 @@ class AssetBase(BaseModel):
     current_stock: Optional[int] = None
     description: Optional[str] = None
     remarks: Optional[str] = None
+    # 房地产专用字段
+    address: Optional[str] = Field(None, max_length=500)
+    area: Optional[float] = Field(None, description="建筑面积(平方米)")
+    land_area: Optional[float] = Field(None, description="占地面积(平方米)")
+    property_type: Optional[str] = Field(None, max_length=50, description="产权类型")
+    property_no: Optional[str] = Field(None, max_length=100, description="产权证号")
+    land_no: Optional[str] = Field(None, max_length=100, description="土地证号")
+    building_no: Optional[str] = Field(None, max_length=50, description="楼栋号")
+    floor: Optional[str] = Field(None, max_length=20, description="楼层")
+    room_no: Optional[str] = Field(None, max_length=50, description="房间号")
+    usage: Optional[str] = Field(None, max_length=50, description="用途")
+    build_year: Optional[int] = Field(None, description="建成年份")
+    structure: Optional[str] = Field(None, max_length=50, description="建筑结构")
 
 
 class AssetCreate(AssetBase):
@@ -171,6 +185,8 @@ class AssetUpdate(BaseModel):
     description: Optional[str] = None
     remarks: Optional[str] = None
     custom_fields: Optional[str] = None
+    images: Optional[List[str]] = None  # 资产照片URL列表
+    # 注意：attachments 通过专门的 API 管理，不在 AssetUpdate 中
 
 
 class AssetResponse(AssetBase):
@@ -179,6 +195,7 @@ class AssetResponse(AssetBase):
     status: AssetStatus
     qr_code: Optional[str] = None
     images: Optional[str] = None
+    attachments: Optional[str] = None
     custom_fields: Optional[str] = None
     created_at: datetime
     updated_at: datetime
@@ -186,6 +203,16 @@ class AssetResponse(AssetBase):
 
     class Config:
         from_attributes = True
+
+
+# ========== 附件 Schema ==========
+class AttachmentInfo(BaseModel):
+    """附件信息"""
+    name: str           # 文件名
+    url: str            # 访问路径
+    type: str           # 文件类型
+    size: int          # 文件大小(bytes)
+    uploaded_at: str    # 上传时间
 
 
 class AssetAssign(BaseModel):

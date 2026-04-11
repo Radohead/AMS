@@ -3,6 +3,7 @@ AMS - Asset Management System 后端服务
 """
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 
 from app.core.config import settings
@@ -20,6 +21,7 @@ from app.api import (
     permissions,
     upload
 )
+import os
 
 
 @asynccontextmanager
@@ -58,6 +60,10 @@ app.include_router(scrap.router, prefix="/api/scrap", tags=["报废管理"])
 app.include_router(inventory_check.router, prefix="/api/inventory-check", tags=["盘点管理"])
 app.include_router(permissions.router, prefix="/api/permissions", tags=["权限管理"])
 app.include_router(upload.router, prefix="/api/upload", tags=["文件上传"])
+
+# 静态文件服务（上传文件访问）
+os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads")
 
 
 @app.get("/")
