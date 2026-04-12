@@ -221,6 +221,46 @@ async def update_check_item(
     return {"message": "Check item updated", "item": item}
 
 
+# 扁平化路径：支持 PUT /inventory-check/items/{item_id}
+@router.put("/items/{item_id}")
+async def update_check_item_flat(
+    item_id: int,
+    item_data: InventoryCheckItemUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """更新盘点明细（扁平路径，扫码盘点时使用）"""
+    item = db.query(InventoryCheckItem).filter(
+        InventoryCheckItem.id == item_id
+    ).first()
+
+    if not item:
+        raise HTTPException(status_code=404, detail="Inventory check item not found")
+
+    update_data = item_data.model_dump(exclude_unset=True)
+
+    # 自动判断盘点结果
+    if update_data.get("actual_status") and not update_data.get("check_result"):
+        if update_data["actual_status"] != item.expected_status:
+            update_data["check_result"] = "discrepancy"
+
+    if update_data.get("actual_location") and update_data["actual_location"] != item.expected_location:
+        update_data["check_result"] = "discrepancy"
+
+    if update_data.get("actual_user_id") and update_data["actual_user_id"] != item.expected_user_id:
+        update_data["check_result"] = "discrepancy"
+
+    for key, value in update_data.items():
+        setattr(item, key, value)
+
+    item.checked_by = current_user.employee_id or 0
+    item.checked_at = datetime.now()
+
+    db.commit()
+
+    return {"message": "Check item updated", "item": item}
+
+
 @router.post("/{check_id}/complete")
 async def complete_inventory_check(
     check_id: int,

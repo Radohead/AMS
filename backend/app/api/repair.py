@@ -4,6 +4,7 @@
 import json
 from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from datetime import datetime
 
@@ -131,10 +132,14 @@ async def update_repair_order(
     return order
 
 
+class RepairOrderAssign(BaseModel):
+    handler_id: int
+
 @router.post("/{order_id}/assign")
 async def assign_repair_order(
     order_id: int,
-    handler_id: int,
+    data: RepairOrderAssign = None,
+    handler_id: int = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -143,7 +148,12 @@ async def assign_repair_order(
     if not order:
         raise HTTPException(status_code=404, detail="Repair order not found")
 
-    order.handler_id = handler_id
+    # 支持body参数和query参数
+    final_handler_id = data.handler_id if data else handler_id
+    if final_handler_id is None:
+        raise HTTPException(status_code=400, detail="handler_id is required")
+
+    order.handler_id = final_handler_id
     order.status = "assigned"
     db.commit()
 

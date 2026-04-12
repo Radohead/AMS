@@ -112,7 +112,7 @@ export const repairApi = {
   get: (id) => api.get(`/repair/${id}`),
   create: (data) => api.post('/repair/', data),
   update: (id, data) => api.put(`/repair/${id}`, data),
-  assign: (id, handlerId) => api.post(`/repair/${id}/assign?handler_id=${handlerId}`),
+  assign: (id, handlerId) => api.post(`/repair/${id}/assign`, { handler_id: handlerId }),
   complete: (id, data) => api.post(`/repair/${id}/complete`, data)
 }
 
@@ -133,7 +133,7 @@ export const inventoryCheckApi = {
   update: (id, data) => api.put(`/inventory-check/${id}`, data),
   start: (id) => api.post(`/inventory-check/${id}/start`),
   getItems: (id, params) => api.get(`/inventory-check/${id}/items`, { params }),
-  updateItem: (id, itemId, data) => api.put(`/inventory-check/${id}/items/${itemId}`, data),
+  updateItem: (id, itemId, data) => api.put(`/inventory-check/items/${itemId}`, data),
   complete: (id) => api.post(`/inventory-check/${id}/complete`),
   getReport: (id) => api.get(`/inventory-check/${id}/report`)
 }
