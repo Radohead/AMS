@@ -107,25 +107,23 @@
         <el-card class="info-card">
           <template #header>
             <span>资产图片</span>
-            <el-button type="primary" size="small" @click="showUploadPhotoDialog">
-              上传照片
-            </el-button>
+            <el-button type="primary" size="small" @click="goEdit">编辑上传</el-button>
           </template>
           <div class="image-list">
-            <el-empty v-if="!images.length" description="暂无图片" />
+            <el-image
+              v-if="!images.length"
+              :src="getAssetPlaceholder(asset.asset_type)"
+              fit="cover"
+              class="asset-placeholder"
+            />
             <div v-else class="image-grid">
-              <div v-for="(img, index) in images" :key="index" class="image-item">
+              <div v-for="(img, index) in imageUrls" :key="index" class="image-item">
                 <el-image
                   :src="img"
-                  :preview-src-list="images"
+                  :preview-src-list="imageUrls"
                   fit="cover"
                   class="asset-image"
                 />
-                <div class="image-overlay">
-                  <el-button type="danger" size="small" circle @click="handleDeletePhoto(img)">
-                    <el-icon><Delete /></el-icon>
-                  </el-button>
-                </div>
               </div>
             </div>
           </div>
@@ -134,15 +132,13 @@
         <el-card class="info-card">
           <template #header>
             <span>资产附件</span>
-            <el-button type="primary" size="small" @click="showUploadAttachmentDialog">
-              上传附件
-            </el-button>
+            <el-button type="primary" size="small" @click="goEdit">编辑上传</el-button>
           </template>
           <el-table :data="attachments" empty-text="暂无附件">
             <el-table-column prop="name" label="文件名" show-overflow-tooltip />
             <el-table-column prop="type" label="类型" width="80">
               <template #default="{ row }">
-                <el-tag size="small">{{ row.type?.toUpperCase() }}</el-tag>
+                <el-tag size="small">{{ row.type?.toUpperCase() || '-' }}</el-tag>
               </template>
             </el-table-column>
             <el-table-column prop="size" label="大小" width="100">
@@ -150,10 +146,9 @@
                 {{ formatFileSize(row.size) }}
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="120">
+            <el-table-column label="操作" width="80">
               <template #default="{ row }">
                 <el-button type="primary" size="small" link @click="downloadAttachment(row)">下载</el-button>
-                <el-button type="danger" size="small" link @click="handleDeleteAttachment(row)">删除</el-button>
               </template>
             </el-table-column>
           </el-table>
@@ -291,49 +286,6 @@
         <el-button type="primary" @click="submitScrap">提交</el-button>
       </template>
     </el-dialog>
-
-    <!-- 上传照片对话框 -->
-    <el-dialog v-model="uploadPhotoDialogVisible" title="上传资产照片" width="500px">
-      <el-upload
-        ref="photoUploadRef"
-        :auto-upload="false"
-        :on-change="handlePhotoFileChange"
-        :file-list="pendingPhotoFiles"
-        accept="image/jpeg,image/png,image/jpg"
-        list-type="picture-card"
-        :limit="10"
-        multiple
-      >
-        <el-icon><Plus /></el-icon>
-      </el-upload>
-      <div class="upload-tip">支持 JPG/PNG，单张不超过10MB，最多10张</div>
-      <template #footer>
-        <el-button @click="uploadPhotoDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="submitUploadPhotos">上传</el-button>
-      </template>
-    </el-dialog>
-
-    <!-- 上传附件对话框 -->
-    <el-dialog v-model="uploadAttachmentDialogVisible" title="上传资产附件" width="500px">
-      <el-upload
-        ref="attachmentUploadRef"
-        :auto-upload="false"
-        accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png"
-        :limit="20"
-        multiple
-        drag
-      >
-        <el-icon><UploadFilled /></el-icon>
-        <div>将文件拖到此处，或<em>点击上传</em></div>
-        <template #tip>
-          <div class="el-upload__tip">支持 PDF、Word、Excel、图片，单文件不超过 20MB，最多20个</div>
-        </template>
-      </el-upload>
-      <template #footer>
-        <el-button @click="uploadAttachmentDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="submitUploadAttachments">上传</el-button>
-      </template>
-    </el-dialog>
   </div>
 </template>
 
@@ -342,6 +294,7 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { assetApi, departmentApi, employeeApi, repairApi, scrapApi } from '@/api/modules'
+import { getAllAssetImageUrls, getAssetPlaceholder, getImageUrl } from '@/utils/image'
 
 const router = useRouter()
 const route = useRoute()
@@ -356,11 +309,6 @@ const employeeList = ref([])
 
 const qrDialogVisible = ref(false)
 const assignDialogVisible = ref(false)
-const uploadPhotoDialogVisible = ref(false)
-const uploadAttachmentDialogVisible = ref(false)
-const photoUploadRef = ref()
-const attachmentUploadRef = ref()
-const pendingPhotoFiles = ref([])
 const repairDialogVisible = ref(false)
 const transferDialogVisible = ref(false)
 const scrapDialogVisible = ref(false)
@@ -392,6 +340,11 @@ const qrCodeUrl = computed(() => {
   return asset.value.id ? `/api/assets/${asset.value.id}/qrcode` : ''
 })
 
+// 获取带完整URL的图片列表
+const imageUrls = computed(() => {
+  return getAllAssetImageUrls(asset.value.images)
+})
+
 onMounted(async () => {
   await loadData()
   await loadDepartments()
@@ -404,7 +357,8 @@ async function loadData() {
     const id = route.params.id
     asset.value = await assetApi.get(id)
     records.value = await assetApi.getRecords(id)
-    images.value = asset.value.images ? JSON.parse(asset.value.images) : []
+    // images 字段后端已自动解析为数组
+    images.value = Array.isArray(asset.value.images) ? asset.value.images : []
     // 加载附件
     attachments.value = await assetApi.getAttachments(id)
   } catch (error) {
@@ -424,7 +378,7 @@ async function loadDepartments() {
 
 async function loadEmployees() {
   try {
-    const res = await employeeApi.list({ page_size: 1000 })
+    const res = await employeeApi.list({ page_size: 100 })
     employeeList.value = res.items
   } catch (error) {
     console.error('加载员工失败', error)
@@ -523,75 +477,6 @@ async function submitScrap() {
   }
 }
 
-function showUploadPhotoDialog() {
-  pendingPhotoFiles.value = []
-  photoUploadRef.value?.clearFiles()
-  uploadPhotoDialogVisible.value = true
-}
-
-function showUploadAttachmentDialog() {
-  attachmentUploadRef.value?.clearFiles()
-  uploadAttachmentDialogVisible.value = true
-}
-
-function handlePhotoFileChange(file, fileList) {
-  pendingPhotoFiles.value = fileList
-}
-
-async function submitUploadPhotos() {
-  if (!pendingPhotoFiles.value.length) {
-    ElMessage.warning('请选择照片')
-    return
-  }
-  const files = pendingPhotoFiles.value.map(f => f.raw).filter(Boolean)
-  try {
-    await assetApi.uploadPhotos(route.params.id, files)
-    ElMessage.success('照片上传成功')
-    uploadPhotoDialogVisible.value = false
-    loadData()
-  } catch (error) {
-    ElMessage.error('上传失败')
-  }
-}
-
-async function handleDeletePhoto(url) {
-  try {
-    await assetApi.deletePhoto(route.params.id, url)
-    ElMessage.success('照片已删除')
-    loadData()
-  } catch (error) {
-    ElMessage.error('删除失败')
-  }
-}
-
-async function submitUploadAttachments() {
-  const fileInput = attachmentUploadRef.value?.$el?.querySelector('input[type=file]')
-  if (!fileInput?.files?.length) {
-    ElMessage.warning('请选择文件')
-    return
-  }
-  const files = Array.from(fileInput.files)
-  try {
-    await assetApi.uploadAttachments(route.params.id, files)
-    ElMessage.success('附件上传成功')
-    uploadAttachmentDialogVisible.value = false
-    loadData()
-  } catch (error) {
-    ElMessage.error('上传失败')
-  }
-}
-
-async function handleDeleteAttachment(att) {
-  try {
-    const filename = att.url.split('/').pop()
-    await assetApi.deleteAttachment(route.params.id, filename)
-    ElMessage.success('附件已删除')
-    loadData()
-  } catch (error) {
-    ElMessage.error('删除失败')
-  }
-}
-
 function downloadAttachment(att) {
   window.open(att.url, '_blank')
 }
@@ -656,6 +541,13 @@ function getActionLabel(action) {
   }
 
   .image-list {
+    .asset-placeholder {
+      width: 100%;
+      height: 200px;
+      border-radius: 4px;
+      border: 1px dashed #dcdfe6;
+    }
+
     .image-grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
@@ -663,7 +555,6 @@ function getActionLabel(action) {
     }
 
     .image-item {
-      position: relative;
       height: 140px;
       border-radius: 4px;
       overflow: hidden;
@@ -672,31 +563,7 @@ function getActionLabel(action) {
         width: 100%;
         height: 100%;
       }
-
-      .image-overlay {
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: rgba(0, 0, 0, 0.4);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        opacity: 0;
-        transition: opacity 0.3s;
-      }
-
-      &:hover .image-overlay {
-        opacity: 1;
-      }
     }
-  }
-
-  .upload-tip {
-    font-size: 12px;
-    color: #909399;
-    margin-top: 10px;
   }
 
   .qr-code-wrapper {

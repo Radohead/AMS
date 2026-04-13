@@ -14,6 +14,10 @@ class Settings(BaseSettings):
     APP_VERSION: str = "1.0.0"
     DEBUG: bool = True
 
+    # 基础URL配置
+    BASE_URL: str = "http://localhost:8000"
+    FRONTEND_URL: str = "http://localhost:5173"  # 前端地址，用于二维码生成
+
     # 数据库配置
     DATABASE_URL: str = "sqlite:///./ams.db"
 

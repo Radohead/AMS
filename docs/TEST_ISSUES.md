@@ -24,6 +24,97 @@
 
 ---
 
+## 2026-04-13 测试/Debug 记录
+
+### 问题1: IP变更后二维码URL不一致
+
+**问题描述**：IP变更后，二维码指向错误的地址
+
+**原因**：
+1. 后端 `generate_qr_code` 硬编码了 `https://ams.example.com`
+2. 前端 `vite.config.js` 代理IP未同步更新
+3. 多个文件存在旧IP硬编码
+
+**修复**：
+- 后端添加 `FRONTEND_URL` 配置项 (`backend/app/core/config.py`)
+- 二维码生成使用 `settings.FRONTEND_URL` (`backend/app/api/assets.py`)
+- 前端代理统一配置 (`frontend/vite.config.js`)
+- 创建二维码更新脚本 (`backend/scripts/update_qr_codes.py`)
+
+**配置文件**（IP变更时只需修改这2处）：
+| 文件 | 配置项 |
+|------|--------|
+| `frontend/vite.config.js` | `BACKEND_IP` |
+| `backend/.env` | `FRONTEND_URL`, `BASE_URL` |
+
+---
+
+### 问题2: 移动端资产详情照片/附件不显示
+
+**问题描述**：移动端详情页无法显示照片和附件
+
+**原因**：
+1. Web端 `AssetResponse` schema 中 `images` 定义为 `str`，前端需要 `JSON.parse()`
+2. 移动端直接使用相对路径，缺少完整URL处理
+3. 移动端详情页缺少附件显示功能
+
+**修复**：
+- 后端 schema 添加 validator 自动解析 JSON 字段 (`backend/app/schemas/asset.py`)
+- 移动端详情页引入 `getImageUrl()` 处理图片URL (`frontend/src/views/mobile/AssetDetail.vue`)
+- 添加附件列表显示功能 (`frontend/src/views/mobile/AssetDetail.vue`)
+
+---
+
+### 问题3: 微信扫码跳转到登录页
+
+**问题描述**：未登录用户扫码后被强制跳转到登录页，无法查看资产概要
+
+**原因**：
+1. 路由守卫强制所有移动端页面需要认证
+2. `GET /{asset_id}/attachments` API 需要认证，导致 401
+
+**修复**：
+- 路由守卫添加公开页面白名单 (`frontend/src/router/index.js`)
+- 附件列表API改为公开接口 (`backend/app/api/assets.py`)
+
+**公开页面列表**：
+- `/mobile/assets/:id` - 资产详情（无需登录）
+
+---
+
+### 问题4: Web端资产详情页加载失败
+
+**问题描述**：Web端资产详情页显示"加载数据失败"
+
+**原因**：代码对已解析的 `images` 字段再次 `JSON.parse()`
+
+**修复**：
+- 移除重复解析，直接使用数组 (`frontend/src/views/assets/AssetDetail.vue`)
+
+---
+
+### 问题5: 二维码管理页面资产列表为空
+
+**问题描述**：二维码管理页面无法加载资产列表
+
+**原因**：使用原生 `fetch` 而非封装 API，未携带认证 token
+
+**修复**：
+- 改用 `assetApi.list()` 替代原生 fetch
+
+---
+
+### 问题6: 二维码URL与资产详情不一致
+
+**问题描述**：批量生成的二维码与资产详情页URL不一致
+
+**原因**：二维码生成使用 `/mobile/scan?no=xxx`，应为 `/mobile/assets/{id}`
+
+**修复**：
+- 统一使用 `/mobile/assets/{id}` 格式
+
+---
+
 ## 问题跟踪表
 
 ### P0: 资产模块 (Assets)
@@ -33,6 +124,9 @@
 | ASSET-BUG-001 | - | 资产新建表单验证正常工作 | - | - | 已通过 | - |
 | ASSET-BUG-002 | - | 资产详情页面跳转正常 | - | - | 已通过 | - |
 | ASSET-BUG-003 | - | 资产编辑页面加载正常 | - | - | 已通过 | - |
+| ASSET-BUG-004 | - | images字段返回数组格式 | 后端 | 高 | ✅已修复 | - |
+| ASSET-BUG-005 | - | 移动端照片/附件显示 | 前端 | 高 | ✅已修复 | - |
+| ASSET-BUG-006 | - | 二维码URL统一格式 | 前端 | 中 | ✅已修复 | - |
 
 ### P1: 分类/部门/员工/报修/报废
 
@@ -54,6 +148,15 @@
 | 角色管理 | 全部7个测试通过 | ✅ |
 | 日志管理 | 全部7个测试通过 | ✅ |
 | 二维码管理 | 全部7个测试通过 | ✅ |
+
+### P3: 移动端 (Mobile)
+
+| 问题ID | 问题描述 | 状态 |
+|--------|----------|------|
+| MOBILE-001 | 微信扫码跳转登录页 | ✅已修复 |
+| MOBILE-002 | 资产照片不显示 | ✅已修复 |
+| MOBILE-003 | 附件列表不显示 | ✅已修复 |
+| MOBILE-004 | 二维码URL不一致 | ✅已修复 |
 
 ---
 
@@ -122,6 +225,12 @@
 3. **前端API调用** (`frontend/src/api/modules.js`)
    - `repair.assign()` 使用 body 参数
    - `inventoryCheck.updateItem()` 使用扁平路径
+
+4. **批量导入/导出功能** (`frontend/src/views/assets/AssetList.vue`)
+   - 添加"下载模板"按钮 - 调用 `GET /api/assets/import/template`
+   - 添加"导入"按钮 - 弹窗上传Excel文件
+   - 添加"导出"按钮 - 调用 `GET /api/assets/export` 下载Excel
+   - 后端导出API改为 GET 方法以支持URL直接下载
 
 ---
 

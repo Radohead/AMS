@@ -1,10 +1,11 @@
 """
 Pydantic schemas - 资产相关
 """
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List
 from datetime import datetime
 from enum import Enum
+import json
 
 
 class AssetType(str, Enum):
@@ -194,15 +195,27 @@ class AssetResponse(AssetBase):
     asset_no: str
     status: AssetStatus
     qr_code: Optional[str] = None
-    images: Optional[str] = None
-    attachments: Optional[str] = None
-    custom_fields: Optional[str] = None
+    images: Optional[List[str]] = None
+    attachments: Optional[List[dict]] = None
+    custom_fields: Optional[dict] = None
     created_at: datetime
     updated_at: datetime
     created_by: Optional[int] = None
 
     class Config:
         from_attributes = True
+
+    @field_validator('images', 'attachments', 'custom_fields', mode='before')
+    @classmethod
+    def parse_json_field(cls, v):
+        if v is None:
+            return v
+        if isinstance(v, str):
+            try:
+                return json.loads(v)
+            except json.JSONDecodeError:
+                return v
+        return v
 
 
 # ========== 附件 Schema ==========
@@ -413,3 +426,8 @@ class BatchImportResult(BaseModel):
     success: int
     failed: int
     errors: List[str]
+
+
+class ExportAssetsRequest(BaseModel):
+    """导出资产请求"""
+    asset_ids: List[int] = Field(..., description="要导出的资产ID列表")

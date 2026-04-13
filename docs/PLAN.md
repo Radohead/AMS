@@ -17,7 +17,11 @@
 | 批量导出 | Sprint 5.5 | ✅ 已完成 | Phase 5.5 |
 | 自定义字段系统 | Sprint 5.1 | ✅ 已完成 | Phase 5.1 |
 | 工作流字段配置 | Sprint 5.2 | ✅ 已完成 | Phase 5.2 |
-| **Phase 6-8** | **移动端/二维码** | ⏳ 待开始 | Phase 6-8 |
+| **Phase 6.1** | **移动端 H5** | ✅ 已完成 | Phase 6.1 |
+| **Phase 6.2** | **微信小程序 (Taro)** | ✅ 已完成 | Phase 6.2 |
+| **Phase 7** | **二维码管理** | ✅ 已完成 | Phase 7 |
+| **Phase 8** | **前端 E2E 测试** | ✅ 已完成 | Phase 8 |
+| **Phase 9** | **微信扫码公开查看** | ✅ 已完成 | Phase 9 |
 
 ## 当前项目状态
 
@@ -33,7 +37,8 @@
 - 批量导入/导出功能
 - 自定义字段系统
 - 工作流字段配置
-- 测试体系（164个测试用例，覆盖15个模块）
+- 测试体系后端（164个测试用例，覆盖15个模块）
+- 测试体系前端（35个测试用例，覆盖4个模块）
 
 ### 待开发 (~8%)
 - 移动端 H5/小程序
@@ -159,6 +164,152 @@ DELETE /api/custom-fields/{field_id}
 
 ---
 
+## Phase 8: 前端 E2E 测试
+
+### Playwright 测试框架
+
+**技术栈**: Playwright + TypeScript + Vite
+
+**测试文件结构**:
+```
+frontend/tests/
+├── pages/
+│   ├── login.spec.ts      # 登录页面测试
+│   ├── dashboard.spec.ts  # 首页测试
+│   └── mobile.spec.ts     # 移动端测试
+├── api/
+│   └── api.spec.ts        # API 集成测试
+├── helpers.ts             # 测试工具函数
+└── playwright.config.ts   # Playwright 配置
+```
+
+**测试命令**:
+```bash
+cd frontend
+npm test           # 运行所有测试
+npm run test:ui    # UI 模式
+npm run test:api   # API 测试
+npm run test:mobile # 移动端测试
+```
+
+**测试用例统计**:
+
+| 测试文件 | 用例数 | 描述 |
+|----------|--------|------|
+| api.spec.ts | 11 | 健康检查/认证/CRUD API |
+| login.spec.ts | 8 | 登录/注册/表单验证 |
+| dashboard.spec.ts | 7 | 首页加载/导航/退出 |
+| mobile.spec.ts | 9 | 移动端 H5 响应式测试 |
+| **合计** | **35** | 前端 E2E 测试 |
+
+### 测试原则
+
+1. **测试分层**: API 集成测试 → 页面级 E2E 测试
+2. **认证处理**: API 用 JWT Token，页面用 login() 辅助函数
+3. **移动端适配**: viewport 375x667，响应式布局验证
+4. **测试隔离**: 每个测试独立，可并行执行
+
+---
+
+## Phase 9: 微信扫码公开查看
+
+### 需求说明
+
+微信扫描资产二维码后，直接跳转到资产详情页面：
+- **无权限用户**：查看资产基础信息（只读）
+- **已登录用户**：查看详情 + 扫码盘点/报修等操作
+- **连续扫码**：保持登录状态
+
+### 技术方案
+
+#### 后端 API
+
+**公开详情接口**（无需认证）：
+```
+GET /api/assets/public/{asset_id}
+```
+
+**配置项** (`backend/.env`)：
+```bash
+FRONTEND_URL="https://10.0.0.113:5173"  # 前端地址
+BASE_URL="https://10.0.0.113:8000"        # 后端地址
+```
+
+**路由顺序**（重要）：
+```
+/no/{asset_no}     # 特定路径优先
+/public/{asset_id}  # 公开接口在通用路径前
+/{asset_id}         # 需认证接口放最后
+```
+
+#### 前端页面
+
+**移动端详情页** (`frontend/src/views/mobile/AssetDetail.vue`)：
+- 使用 `getPublic()` API 获取数据
+- 检测登录状态 `isLoggedIn = !!userStore.token`
+- 未登录：显示基础信息 + 登录入口
+- 已登录：显示完整信息 + 操作按钮
+
+**扫码页面** (`frontend/src/views/mobile/Scan.vue`)：
+- 支持完整URL解析：`https://domain/mobile/assets/{id}`
+- 支持相对路径解析：`/mobile/assets/{id}`
+- 支持JSON格式：`{"type":"asset","id":1}`
+
+#### 二维码生成
+
+**生成规则** (`backend/app/api/assets.py`)：
+```python
+def generate_qr_code(asset_no: str, asset_id: int) -> str:
+    frontend_url = settings.FRONTEND_URL.rstrip('/')
+    return f"{frontend_url}/mobile/assets/{asset_id}"
+```
+
+#### IP 配置管理
+
+**⚠️ IP变更必须同步更新二维码（仅测试阶段）**
+
+**说明**：开发测试阶段IP可能变化，生产环境使用固定域名，二维码URL保持稳定。
+
+**测试阶段 IP配置点（网络变更时只需修改这2处）**：
+
+| 文件 | 配置项 | 说明 |
+|------|--------|------|
+| `frontend/vite.config.js` | `BACKEND_IP = '10.0.0.113'` | 前端代理 |
+| `backend/.env` | `FRONTEND_URL`, `BASE_URL` | 后端配置 |
+
+**生产环境**：
+- 使用固定域名（如 `ams.company.com`）
+- `FRONTEND_URL` 和 `BASE_URL` 指向同一域名
+- 二维码URL长期有效，无需频繁更新
+
+**IP变更后必须执行的操作**：
+
+1. 更新 `frontend/vite.config.js` 中的 `BACKEND_IP`
+2. 更新 `backend/.env` 中的 `FRONTEND_URL` 和 `BASE_URL`
+3. **重新生成所有资产的二维码**：
+```bash
+cd backend
+source venv/bin/activate
+python -c "
+from app.models.asset import Asset
+from app.core.database import SessionLocal
+from app.core.config import settings
+db = SessionLocal()
+assets = db.query(Asset).all()
+for asset in assets:
+    asset.qr_code = f'{settings.FRONTEND_URL.rstrip(\"/\")}/mobile/assets/{asset.id}'
+db.commit()
+db.close()
+print(f'已更新 {len(assets)} 个资产的二维码')
+"
+```
+
+**自动化建议**：
+- 将二维码更新脚本集成到项目启动脚本 `start.sh` 中
+- 或创建独立脚本 `scripts/update-qr-codes.sh`
+
+---
+
 ## 环境配置
 
 ### .env 文件
@@ -269,12 +420,14 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 
 每个新模块开发前，确认以下清单：
 
-- [ ] 分析需求，更新 PLAN_DETAIL.md 用例
-- [ ] 创建测试文件 `tests/test_<module>.py`
-- [ ] 编写测试用例（参考现有文件格式）
+- [ ] 分析需求，更新 docs/PLAN_DETAIL.md 用例
+- [ ] 创建后端测试文件 `backend/tests/test_<module>.py`
+- [ ] 编写后端测试用例（pytest）
 - [ ] 实现后端 API 和数据模型
+- [ ] `pytest backend/tests/test_<module>.py -v` 全部通过
 - [ ] 实现前端页面和组件
-- [ ] `pytest tests/test_<module>.py -v` 全部通过
-- [ ] `pytest tests/ -v` 完整套件全部通过
-- [ ] 更新 PLAN.md 模块状态为 ✅
+- [ ] 创建前端测试文件 `frontend/tests/pages/<module>.spec.ts`
+- [ ] 编写前端 E2E 测试用例（Playwright）
+- [ ] `npm test` 全部通过
+- [ ] 更新 docs/PLAN.md 模块状态为 ✅
 - [ ] `git add` + `git commit` + `git push`

@@ -8,6 +8,68 @@ const routes = [
     component: () => import('@/views/Login.vue'),
     meta: { title: '登录' }
   },
+  // 移动端路由
+  {
+    path: '/mobile',
+    component: () => import('@/views/mobile/Layout.vue'),
+    meta: { requiresAuth: true, isMobile: true },
+    children: [
+      {
+        path: '',
+        name: 'MobileHome',
+        component: () => import('@/views/mobile/Home.vue'),
+        meta: { title: '首页' }
+      },
+      {
+        path: 'login',
+        name: 'MobileLogin',
+        component: () => import('@/views/mobile/Login.vue'),
+        meta: { title: '登录' }
+      },
+      {
+        path: 'assets',
+        name: 'MobileAssetList',
+        component: () => import('@/views/mobile/AssetList.vue'),
+        meta: { title: '资产列表' }
+      },
+      {
+        path: 'assets/:id',
+        name: 'MobileAssetDetail',
+        component: () => import('@/views/mobile/AssetDetail.vue'),
+        meta: { title: '资产详情' }
+      },
+      {
+        path: 'scan',
+        name: 'MobileScan',
+        component: () => import('@/views/mobile/Scan.vue'),
+        meta: { title: '扫码' }
+      },
+      {
+        path: 'check',
+        name: 'MobileCheck',
+        component: () => import('@/views/mobile/Check.vue'),
+        meta: { title: '盘点' }
+      },
+      {
+        path: 'repair',
+        name: 'MobileRepair',
+        component: () => import('@/views/mobile/Repair.vue'),
+        meta: { title: '报修' }
+      },
+      {
+        path: 'repair/create',
+        name: 'MobileRepairCreate',
+        component: () => import('@/views/mobile/RepairForm.vue'),
+        meta: { title: '新建报修' }
+      },
+      {
+        path: 'profile',
+        name: 'MobileProfile',
+        component: () => import('@/views/mobile/Profile.vue'),
+        meta: { title: '个人中心' }
+      }
+    ]
+  },
   {
     path: '/',
     component: () => import('@/views/Layout.vue'),
@@ -30,6 +92,12 @@ const routes = [
         name: 'AssetCreate',
         component: () => import('@/views/assets/AssetForm.vue'),
         meta: { title: '新建资产', icon: 'Plus' }
+      },
+      {
+        path: 'assets/:id/edit',
+        name: 'AssetEdit',
+        component: () => import('@/views/assets/AssetForm.vue'),
+        meta: { title: '编辑资产' }
       },
       {
         path: 'assets/:id',
@@ -102,6 +170,12 @@ const routes = [
         name: 'LogList',
         component: () => import('@/views/system/LogList.vue'),
         meta: { title: '操作日志', icon: 'Document' }
+      },
+      {
+        path: 'qrcodes',
+        name: 'QrcodeGenerator',
+        component: () => import('@/views/qrcode/QrcodeGenerator.vue'),
+        meta: { title: '二维码管理', icon: 'Connection' }
       }
     ]
   }
@@ -116,7 +190,24 @@ const router = createRouter({
 router.beforeEach((to, from, next) => {
   const userStore = useUserStore()
 
-  if (to.path !== '/login' && !userStore.token) {
+  // 移动端登录页直接放行
+  if (to.path === '/mobile/login') {
+    next()
+    return
+  }
+
+  // 移动端公开页面（无需登录）
+  const publicMobilePaths = ['/mobile/assets/']
+  const isPublicMobilePath = publicMobilePaths.some(path => to.path.startsWith(path))
+
+  // 移动端其他页面需要认证（除了公开页面）
+  if (to.path.startsWith('/mobile') && !userStore.token && !isPublicMobilePath) {
+    next('/mobile/login')
+    return
+  }
+
+  // Web端需要登录（排除已登录用户访问登录页）
+  if (to.path !== '/login' && !userStore.token && !isPublicMobilePath) {
     next('/login')
   } else if (to.path === '/login' && userStore.token) {
     next('/')

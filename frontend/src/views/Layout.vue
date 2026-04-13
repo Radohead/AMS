@@ -27,6 +27,7 @@
           <el-menu-item index="/assets">资产列表</el-menu-item>
           <el-menu-item index="/assets/create">新建资产</el-menu-item>
           <el-menu-item index="/categories">资产分类</el-menu-item>
+          <el-menu-item index="/qrcodes">二维码管理</el-menu-item>
         </el-sub-menu>
 
         <el-sub-menu index="/people">

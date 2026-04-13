@@ -5,8 +5,11 @@ export const assetApi = {
   // 获取资产列表
   list: (params) => api.get('/assets/', { params }),
 
-  // 获取资产详情
+  // 获取资产详情（需要认证）
   get: (id) => api.get(`/assets/${id}`),
+
+  // 公开获取资产详情（无需认证）
+  getPublic: (id) => api.get(`/assets/public/${id}`),
 
   // 通过编码获取资产
   getByNo: (assetNo) => api.get(`/assets/no/${assetNo}`),
@@ -38,7 +41,11 @@ export const assetApi = {
   // 上传资产照片
   uploadPhotos: (id, files) => {
     const formData = new FormData()
-    files.forEach(file => formData.append('files', file))
+    files.forEach(file => {
+      // el-upload 的 file-list 中新文件在 raw 属性中
+      const fileObj = file.raw || file
+      formData.append('files', fileObj)
+    })
     return api.post(`/assets/${id}/photos`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     })
@@ -52,7 +59,11 @@ export const assetApi = {
   // 上传资产附件
   uploadAttachments: (id, files) => {
     const formData = new FormData()
-    files.forEach(file => formData.append('files', file))
+    files.forEach(file => {
+      // el-upload 的 file-list 中新文件在 raw 属性中
+      const fileObj = file.raw || file
+      formData.append('files', fileObj)
+    })
     return api.post(`/assets/${id}/attachments`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     })
@@ -65,7 +76,26 @@ export const assetApi = {
   deleteAttachment: (id, filename) => api.delete(`/assets/${id}/attachments/${filename}`),
 
   // 获取资产统计
-  getStats: () => api.get('/assets/stats/overview')
+  getStats: () => api.get('/assets/stats/overview'),
+
+  // 下载导入模板
+  downloadTemplate: () => `${import.meta.env.VITE_API_URL || '/api'}/assets/import/template`,
+
+  // 批量导入资产
+  importAssets: (file) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    return api.post('/assets/import', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+  },
+
+  // 批量导出资产
+  exportAssets: (params = {}) => {
+    // 构建查询参数字符串
+    const queryStr = new URLSearchParams(params).toString()
+    return `${import.meta.env.VITE_API_URL || '/api'}/assets/export?${queryStr}`
+  }
 }
 
 // 分类相关API

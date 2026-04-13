@@ -9,7 +9,7 @@ from io import BytesIO
 import base64
 from typing import Optional, List
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Query
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Query, Body
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, and_, func
@@ -28,7 +28,8 @@ from app.schemas.asset import (
     AssetRecordResponse,
     ConsumableRecordCreate,
     ConsumableRecordResponse,
-    PageResponse
+    PageResponse,
+    ExportAssetsRequest,
 )
 
 router = APIRouter()
@@ -41,14 +42,11 @@ def generate_asset_no(category_id: int = 0) -> str:
     return f"AS{timestamp}{unique_id}"
 
 
-def generate_qr_code(asset_no: str, asset_name: str) -> str:
-    """生成二维码数据"""
-    qr_data = {
-        "asset_no": asset_no,
-        "name": asset_name,
-        "verify_url": f"/api/assets/scan/{asset_no}"
-    }
-    return json.dumps(qr_data)
+def generate_qr_code(asset_no: str, asset_id: int) -> str:
+    """生成二维码数据 - 直接存储完整URL"""
+    # 使用 FRONTEND_URL（前端地址），微信扫码可直接打开H5页面
+    frontend_url = settings.FRONTEND_URL.rstrip('/')
+    return f"{frontend_url}/mobile/assets/{asset_id}"
 
 
 @router.get("/", response_model=PageResponse)
@@ -100,17 +98,135 @@ async def list_assets(
     return PageResponse(total=total, page=page, page_size=page_size, items=item_responses)
 
 
-@router.get("/{asset_id}", response_model=AssetResponse)
-async def get_asset(
-    asset_id: int,
+@router.get("/export")
+async def export_assets(
+    format: str = Query("xlsx", description="导出格式: xlsx 或 csv"),
+    keyword: Optional[str] = Query(None, description="搜索关键词"),
+    category_id: Optional[int] = Query(None, description="分类ID"),
+    department_id: Optional[int] = Query(None, description="部门ID"),
+    user_id: Optional[int] = Query(None, description="使用人ID"),
+    status: Optional[str] = Query(None, description="资产状态"),
+    asset_type: Optional[str] = Query(None, description="资产类型"),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_permission("asset", "read"))
 ):
-    """获取资产详情"""
-    asset = db.query(Asset).filter(Asset.id == asset_id).first()
-    if not asset:
-        raise HTTPException(status_code=404, detail="Asset not found")
-    return asset
+    """
+    批量导出资产
+
+    支持筛选条件：
+    - keyword: 搜索关键词（资产名称/编码/序列号）
+    - category_id: 分类ID
+    - department_id: 部门ID
+    - user_id: 使用人ID
+    - status: 资产状态
+    - asset_type: 资产类型
+
+    导出格式：
+    - xlsx: Excel 格式（默认）
+    - csv: CSV 格式
+    """
+    from fastapi.responses import StreamingResponse
+    from app.utils.excel_export import (
+        export_assets_to_excel,
+        export_assets_to_csv,
+        generate_export_filename,
+    )
+
+    format = format.lower()
+    if format not in ("xlsx", "csv"):
+        raise HTTPException(
+            status_code=400,
+            detail="不支持的导出格式，请使用 xlsx 或 csv"
+        )
+
+    if format == "xlsx":
+        content = export_assets_to_excel(
+            db=db,
+            keyword=keyword,
+            category_id=category_id,
+            department_id=department_id,
+            user_id=user_id,
+            status=status,
+            asset_type=asset_type,
+        )
+        media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    else:
+        content = export_assets_to_csv(
+            db=db,
+            keyword=keyword,
+            category_id=category_id,
+            department_id=department_id,
+            user_id=user_id,
+            status=status,
+            asset_type=asset_type,
+        )
+        media_type = "text/csv; charset=utf-8-sig"
+
+    filename = generate_export_filename(format)
+    from urllib.parse import quote
+    encoded_filename = quote(filename)
+
+    buffer = BytesIO(content)
+    buffer.seek(0)
+
+    return StreamingResponse(
+        buffer,
+        media_type=media_type,
+        headers={
+            "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}"
+        },
+    )
+
+
+@router.post("/export")
+async def export_assets_selected(
+    request: ExportAssetsRequest,
+    format: str = Query("xlsx", description="导出格式: xlsx 或 csv"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission("asset", "read"))
+):
+    """
+    导出选定的资产（通过资产ID列表）
+
+    - request.asset_ids: 要导出的资产ID列表
+    - format: 导出格式 (xlsx 或 csv)
+    """
+    from fastapi.responses import StreamingResponse
+    from app.utils.excel_export import (
+        export_assets_to_excel,
+        export_assets_to_csv,
+        generate_export_filename,
+    )
+
+    asset_ids = request.asset_ids
+    format = format.lower()
+    if format not in ("xlsx", "csv"):
+        raise HTTPException(
+            status_code=400,
+            detail="不支持的导出格式，请使用 xlsx 或 csv"
+        )
+
+    if format == "xlsx":
+        content = export_assets_to_excel(db=db, asset_ids=asset_ids)
+        media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    else:
+        content = export_assets_to_csv(db=db, asset_ids=asset_ids)
+        media_type = "text/csv; charset=utf-8-sig"
+
+    filename = generate_export_filename(format)
+    from urllib.parse import quote
+    encoded_filename = quote(filename)
+
+    buffer = BytesIO(content)
+    buffer.seek(0)
+
+    return StreamingResponse(
+        buffer,
+        media_type=media_type,
+        headers={
+            "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}"
+        },
+    )
 
 
 @router.get("/no/{asset_no}", response_model=AssetResponse)
@@ -120,6 +236,31 @@ async def get_asset_by_no(
 ):
     """通过编码获取资产（扫码专用）"""
     asset = db.query(Asset).filter(Asset.asset_no == asset_no).first()
+    if not asset:
+        raise HTTPException(status_code=404, detail="Asset not found")
+    return asset
+
+
+@router.get("/public/{asset_id}", response_model=AssetResponse)
+async def get_asset_public(
+    asset_id: int,
+    db: Session = Depends(get_db)
+):
+    """公开获取资产详情（无需认证）- 微信扫码查看"""
+    asset = db.query(Asset).filter(Asset.id == asset_id).first()
+    if not asset:
+        raise HTTPException(status_code=404, detail="Asset not found")
+    return asset
+
+
+@router.get("/{asset_id}", response_model=AssetResponse)
+async def get_asset(
+    asset_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """获取资产详情"""
+    asset = db.query(Asset).filter(Asset.id == asset_id).first()
     if not asset:
         raise HTTPException(status_code=404, detail="Asset not found")
     return asset
@@ -160,12 +301,16 @@ async def create_asset(
         images=json.dumps(asset_data.images) if asset_data.images else None,
         custom_fields=asset_data.custom_fields,
         created_by=current_user.id,
-        qr_code=generate_qr_code(asset_no, asset_data.name)
+        qr_code=""  # 先设为空，创建后再更新
     )
 
     db.add(asset)
     db.commit()
     db.refresh(asset)
+
+    # 创建后更新 qr_code
+    asset.qr_code = generate_qr_code(asset_no, asset.id)
+    db.commit()
 
     # 记录变动
     record = AssetRecord(
@@ -429,6 +574,24 @@ async def get_asset_qrcode(
     return StreamingResponse(buffer, media_type="image/png")
 
 
+@router.post("/{asset_id}/qrcode/regenerate")
+async def regenerate_asset_qrcode(
+    asset_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission("asset", "update"))
+):
+    """重新生成资产二维码"""
+    asset = db.query(Asset).filter(Asset.id == asset_id).first()
+    if not asset:
+        raise HTTPException(status_code=404, detail="Asset not found")
+
+    # 重新生成二维码
+    asset.qr_code = generate_qr_code(asset.asset_no, asset.id)
+    db.commit()
+
+    return {"message": "二维码已重新生成", "qr_code": asset.qr_code}
+
+
 @router.post("/{asset_id}/photos")
 async def upload_asset_photos(
     asset_id: int,
@@ -519,7 +682,7 @@ async def upload_asset_attachments(
         raise HTTPException(status_code=400, detail="Maximum 20 attachments allowed")
 
     # 支持的文件类型
-    ALLOWED_TYPES = {".pdf", ".doc", ".docx", ".xls", ".xlsx", ".jpg", ".jpeg", ".png"}
+    ALLOWED_TYPES = {".pdf", ".doc", ".docx", ".xls", ".xlsx", ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".txt", ".zip", ".rar"}
     MAX_FILE_SIZE = 20 * 1024 * 1024  # 20MB
 
     # 保存新附件
@@ -564,10 +727,9 @@ async def upload_asset_attachments(
 @router.get("/{asset_id}/attachments")
 async def list_asset_attachments(
     asset_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
-    """获取资产附件列表"""
+    """获取资产附件列表（公开接口，无需认证）"""
     asset = db.query(Asset).filter(Asset.id == asset_id).first()
     if not asset:
         raise HTTPException(status_code=404, detail="Asset not found")
@@ -759,10 +921,14 @@ async def import_assets(
                 description=validated.get("description"),
                 remarks=validated.get("remarks"),
                 created_by=current_user.id,
-                qr_code=generate_qr_code(asset_no, validated["name"]),
+                qr_code="",  # 先设为空，flush后再更新
             )
             db.add(asset)
             db.flush()  # 获取资产 ID
+
+            # flush后更新 qr_code
+            asset.qr_code = generate_qr_code(asset_no, asset.id)
+            db.flush()
 
             # 记录变动
             record = AssetRecord(
@@ -817,86 +983,6 @@ async def download_import_template(
     return StreamingResponse(
         buffer,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={
-            "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}"
-        },
-    )
-
-
-@router.post("/export")
-async def export_assets(
-    format: str = Query("xlsx", description="导出格式: xlsx 或 csv"),
-    keyword: Optional[str] = Query(None, description="搜索关键词"),
-    category_id: Optional[int] = Query(None, description="分类ID"),
-    department_id: Optional[int] = Query(None, description="部门ID"),
-    user_id: Optional[int] = Query(None, description="使用人ID"),
-    status: Optional[str] = Query(None, description="资产状态"),
-    asset_type: Optional[str] = Query(None, description="资产类型"),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_permission("asset", "read"))
-):
-    """
-    批量导出资产
-
-    支持筛选条件：
-    - keyword: 搜索关键词（资产名称/编码/序列号）
-    - category_id: 分类ID
-    - department_id: 部门ID
-    - user_id: 使用人ID
-    - status: 资产状态
-    - asset_type: 资产类型
-
-    导出格式：
-    - xlsx: Excel 格式（默认）
-    - csv: CSV 格式
-    """
-    from fastapi.responses import StreamingResponse
-    from app.utils.excel_export import (
-        export_assets_to_excel,
-        export_assets_to_csv,
-        generate_export_filename,
-    )
-
-    format = format.lower()
-    if format not in ("xlsx", "csv"):
-        raise HTTPException(
-            status_code=400,
-            detail="不支持的导出格式，请使用 xlsx 或 csv"
-        )
-
-    if format == "xlsx":
-        content = export_assets_to_excel(
-            db=db,
-            keyword=keyword,
-            category_id=category_id,
-            department_id=department_id,
-            user_id=user_id,
-            status=status,
-            asset_type=asset_type,
-        )
-        media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    else:
-        content = export_assets_to_csv(
-            db=db,
-            keyword=keyword,
-            category_id=category_id,
-            department_id=department_id,
-            user_id=user_id,
-            status=status,
-            asset_type=asset_type,
-        )
-        media_type = "text/csv; charset=utf-8-sig"
-
-    filename = generate_export_filename(format)
-    from urllib.parse import quote
-    encoded_filename = quote(filename)
-
-    buffer = BytesIO(content)
-    buffer.seek(0)
-
-    return StreamingResponse(
-        buffer,
-        media_type=media_type,
         headers={
             "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}"
         },
